@@ -41,15 +41,15 @@ def process_audio_mixing(video_url, audio_url, video_vol, audio_vol, output_leng
     # Prepare FFmpeg command
     cmd = ['ffmpeg', '-y']
 
+    # Video settings - stream_loop must come BEFORE the input it applies to
+    if output_length == 'audio' and audio_duration > video_duration:
+        cmd.extend(['-stream_loop', '-1'])  # Loop video only if output_length is 'audio' and audio is longer
+
     # Input video
     cmd.extend(['-i', video_path])
 
     # Input audio
     cmd.extend(['-i', audio_path])
-
-    # Video settings
-    if output_length == 'audio' and audio_duration > video_duration:
-        cmd.extend(['-stream_loop', '-1'])  # Loop video only if output_length is 'audio' and audio is longer
 
     # Audio settings
     audio_filter = f'[1:a]volume={audio_vol/100}'

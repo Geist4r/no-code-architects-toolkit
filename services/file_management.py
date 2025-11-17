@@ -58,20 +58,45 @@ def get_extension_from_url(url):
     # If we can't determine the extension, raise an error
     raise ValueError(f"Could not determine file extension from URL: {url}")
 
-def download_file(url, storage_path="/tmp/"):
-    """Download a file from URL to local storage."""
+def download_file(url, storage_path="/tmp/", custom_headers=None):
+    """Download a file from URL to local storage with optional custom headers.
+    
+    Args:
+        url (str): The URL to download from
+        storage_path (str): Local storage path
+        custom_headers (dict): Optional custom headers (e.g., {'Authorization': 'Bearer token'})
+        
+    Returns:
+        str: Path to the downloaded file
+    """
     # Create storage directory if it doesn't exist
     os.makedirs(storage_path, exist_ok=True)
-    
+
+    # Rewrite external MinIO link to internal Docker address if needed
+    minio_external = os.environ.get("S3_PUBLIC_URL", "http://78.46.146.79:9000")
+    minio_internal = os.environ.get("S3_ENDPOINT_URL", "http://minio:9000")
+    if url.startswith(minio_external):
+        url = url.replace(minio_external, minio_internal, 1)
+
     file_id = str(uuid.uuid4())
     extension = get_extension_from_url(url)
     local_filename = os.path.join(storage_path, f"{file_id}{extension}")
 
+
+    import logging
+    logger = logging.getLogger(__name__)
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
+        # Merge custom headers if provided
+        if custom_headers:
+            headers.update(custom_headers)
+
+        logger.info(f"Downloading file from URL: {url}")
         response = requests.get(url, stream=True, headers=headers)
+        logger.info(f"HTTP status: {response.status_code}")
+        logger.info(f"Response headers: {response.headers}")
         response.raise_for_status()
 
         with open(local_filename, 'wb') as f:
@@ -79,8 +104,10 @@ def download_file(url, storage_path="/tmp/"):
                 if chunk:
                     f.write(chunk)
 
+        logger.info(f"File downloaded successfully: {local_filename}")
         return local_filename
     except Exception as e:
+        logger.error(f"Error downloading file from {url}: {e}")
         if os.path.exists(local_filename):
             os.remove(local_filename)
         raise e
